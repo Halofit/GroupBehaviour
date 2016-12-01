@@ -2,11 +2,9 @@
 #include "InitSDL.h"
 #include "../Globals.h"
 
-// Screen dimension constants
-const int SCREEN_WIDTH = 1000;
-const int SCREEN_HEIGHT = 1000;
 
-bool initSDL() {
+bool initSDL(int screen_width, int screen_height) {
+	
 	// Initialize SDL
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
 		fprintf(stderr, "SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
@@ -14,7 +12,7 @@ bool initSDL() {
 	}
 
 	// Create window
-	g.window = SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+	g.window = SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_SHOWN);
 	if (g.window == nullptr) {
 		fprintf(stderr, "Window could not be created! SDL Error: %s\n", SDL_GetError());
 		return false;

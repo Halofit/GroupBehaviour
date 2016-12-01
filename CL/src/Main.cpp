@@ -106,10 +106,15 @@ void renderObjects() {
 	}
 }
 
+// TODO wall force direction vectors must be adjusted to agent locations
+
+// Screen dimension constants
+const int SCREEN_WIDTH = 500;
+const int SCREEN_HEIGHT = 500;
 
 int main(int argc, char* args[]) {
 	//Start up SDL and create window
-	if (!initSDL()) {
+	if (!initSDL(SCREEN_WIDTH, SCREEN_HEIGHT)) {
 		printf("Failed to initialize!\n");
 		return -1;
 	}
@@ -163,7 +168,7 @@ int main(int argc, char* args[]) {
 			renderText(leftPad(ss.str(), 4), {10,18}, PositionAlignment::BOT_LEFT);
 
 			ss.str(std::string()); //clear ss
-			ss << "No-one left behind!";
+			ss << "Stuff!";
 			renderText(ss.str(), {10,18}, PositionAlignment::BOT_RIGHT);
 
 
