@@ -59,6 +59,7 @@ Debug
 # Other VS stuff
 *.sdf
 *.opensdf
+*.opendb
 *.ilk
 *.pdb
 *.idb
