@@ -34,7 +34,10 @@ Vec2i getMousePosition() {
 }
 
 
-const float world_multiplier = 40.f;
+// Screen dimension constants
+const float world_multiplier = 20.f;
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 800;
 
 
 void handleKeyboardInput(SDL_Event e) {
@@ -106,11 +109,6 @@ void renderObjects() {
 	}
 }
 
-// TODO wall force direction vectors must be adjusted to agent locations
-
-// Screen dimension constants
-const int SCREEN_WIDTH = 500;
-const int SCREEN_HEIGHT = 500;
 
 int main(int argc, char* args[]) {
 	//Start up SDL and create window
@@ -129,7 +127,7 @@ int main(int argc, char* args[]) {
 		if (g.sans_font == nullptr) signalError("Font not found.");
 
 
-		//Game loop setup: timing, event handlers ...
+		//Main loop setup: timing, event handlers ...
 		double tick_time = 0.016f;
 		std::clock_t start_time;
 		std::clock_t curr_time;
@@ -140,6 +138,9 @@ int main(int argc, char* args[]) {
 		//Event handler
 		SDL_Event sdl_event;
 
+		Vec2i ws = getWindowSize();
+		Vec2f world_size{ws.x/world_multiplier, ws.y/world_multiplier};
+		g.simulation.init(world_size);
 
 		//While application is running
 		g.quit = false;
@@ -168,7 +169,7 @@ int main(int argc, char* args[]) {
 			renderText(leftPad(ss.str(), 4), {10,18}, PositionAlignment::BOT_LEFT);
 
 			ss.str(std::string()); //clear ss
-			ss << "Stuff!";
+			ss << g.simulation.agents.size();
 			renderText(ss.str(), {10,18}, PositionAlignment::BOT_RIGHT);
 
 
@@ -195,9 +196,7 @@ int main(int argc, char* args[]) {
 			start_time = std::clock();
 		}
 	}
-
-	logVar(g.simulation.agents.size());
-
+	
 	//Free resources and close SDL
 	closeSDL();
 
