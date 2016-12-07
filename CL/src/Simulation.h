@@ -88,6 +88,8 @@ struct Simulation {
 	std::vector<Agent> agents;
 	std::vector<Wall> walls;
 
+	float elapsed_time;
+
 	float bound_up;
 	float bound_down;
 	float bound_left;
@@ -96,6 +98,7 @@ struct Simulation {
 
 	Simulation() {
 		//We want this to be global so we don't allow a constructor with an argument
+		elapsed_time = INFINITY;
 	}
 
 	void init(Vec2f world_size) {
@@ -105,6 +108,7 @@ struct Simulation {
 		bound_left = -extra_bounds;
 		bound_right = world_size.y + extra_bounds;
 		
+		elapsed_time = 0;
 	}
 
 
@@ -129,9 +133,18 @@ struct Simulation {
 	}
 
 
-	void addAgent(Vec2f loc) {
+	void addAgent(const Vec2f loc) {
 		float diameter = 0.5f + (2.f * getRandomFloat() / 10.f);
 		agents.push_back(Agent(diameter, loc));
+	}
+
+	void addAgents(const Vec2f loc, int ammount) {
+		for (int i = 0; i < ammount; ++i) {
+			for (int j = 0; j < ammount; ++j) {
+				Vec2f a{1.f*i, 1.f*j};
+				this->addAgent(loc+a);
+			}
+		}
 	}
 
 
@@ -142,23 +155,22 @@ struct Simulation {
 
 	static float helper_g_function(float dist) {
 		return std::max(dist, 0.f);
-	};
-
+	}
 
 	Vec2f force(const Agent& ai, const Agent& aj) const {
 		auto g = helper_g_function;
 
 		Vec2f n_ij = (ai.location - aj.location); //Get ij normal
 
-		float d_ij = n_ij.length(); //Disntace 
-		float r_ij = (ai.diameter + aj.diameter) / 2;
+		const float d_ij = n_ij.length(); //Disntace 
+		const float r_ij = (ai.diameter + aj.diameter) / 2;
 		n_ij = n_ij.normalised(); //Normalise normal ij
-		Vec2f t_ij(-n_ij.y, n_ij.x); //Tangent is orthogonal
-		Vec2f delta_v_ji = (aj.velocity - ai.velocity) * t_ij;
+		const Vec2f t_ij(-n_ij.y, n_ij.x); //Tangent is orthogonal
+		const Vec2f delta_v_ji = (aj.velocity - ai.velocity) * t_ij;
 
-		float dd = (r_ij - d_ij);
+		const float dd = (r_ij - d_ij);
 
-		Vec2f f_ij = (A_i * exp(dd / B_i) + k * g(dd)) * n_ij + (kappa * g(dd) * delta_v_ji * t_ij);
+		const Vec2f f_ij = (A_i * exp(dd / B_i) + k * g(dd)) * n_ij + (kappa * g(dd) * delta_v_ji * t_ij);
 		return f_ij;
 	}
 
@@ -183,16 +195,15 @@ struct Simulation {
 	}
 
 	
-
-
-	void applyForces(float delta_t) {
-		//First term
+	void firstTerm() {
 		for (auto& a : agents) {
 			a.accumulator = a.mass * ((a.desired_velocity * a.direction - a.velocity) / agent_acceleration_time);
 		}
+	}
 
 
-		//Second term
+
+	void secondTermOld() {
 		for (auto& a : agents) {
 			for (auto& a2 : agents) {
 				if (&a != &a2) {
@@ -201,15 +212,32 @@ struct Simulation {
 			}
 		}
 
-		//Third term
+	}
+
+	void secondTerm() {
+
+		for (int i = 0; i < agents.size(); ++i) {
+			//Split in two for micro optimisation
+			for (int j = 0; j < i; ++j) {
+				agents[i].accumulator += force(agents[i], agents[j]);
+			}
+
+			for (int j = i+1; j < agents.size(); ++j) {
+				agents[i].accumulator += force(agents[i], agents[j]);
+			}
+		}
+	}
+
+	void thirdTerm() {
 		for (auto& a : agents) {
 			for (auto& w : walls) {
 				a.accumulator += force(a, w);
 			}
 		}
 
-
-		//Apply
+	}
+	
+	void applyForces(float delta_t) {
 		for (auto& a : agents) {
 			Vec2f velocityChange = (a.accumulator / a.mass) * delta_t;
 			if (velocityChange.lengthSquared() > max_velocity * max_velocity) {
@@ -237,6 +265,14 @@ struct Simulation {
 
 	void tick(float delta_t) {
 		cleanRedundant();
+
+		//Calculate three terms of equation
+		firstTerm();
+		secondTerm();
+		thirdTerm();
 		applyForces(delta_t);
+
+
+		elapsed_time += delta_t;
 	}
 };

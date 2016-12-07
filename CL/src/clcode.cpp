@@ -9,6 +9,8 @@
 
 #include <stdio.h>
 #include <CL/cl.h>
+#include <memory>
+#include "Simulation.h"
 
 
 std::string kernelFilename = "Kernel.cl";
@@ -22,9 +24,9 @@ void checkErr(cl_int err, std::string name, int line) {
 	}
 }
 
-namespace info {
+namespace cl {
 
-	std::string mapDeviceType(cl_device_type type) {
+	std::string deviceTypeName(cl_device_type type) {
 		switch (type) {
 			case CL_DEVICE_TYPE_DEFAULT:
 				return "DEF";
@@ -90,7 +92,7 @@ namespace info {
 		std::stringstream ss;
 
 		ss << "Device: " << name << "\n"
-			<< "\tType:\t\t\t" << mapDeviceType(type) << "\n"
+			<< "\tType:\t\t\t" << deviceTypeName(type) << "\n"
 			<< "\tAvalible:\t\t" << avalible << "\n"
 			<< "\tMax allocation size:\t" << maxAllocSize << "\n"
 			<< "\tAddress bits:\t\t" << addressBits << "\n"
@@ -204,165 +206,121 @@ std::string loadKernelFile(std::string filename) {
 	return content;
 }
 
-/*
+
 const size_t pltfC = 0;
 const size_t deviC = 0;
 
-int* mandelbrot(int sizeX, int sizeY) {
-	cl_int err;
-	// Get the platform
-	std::vector<cl::Platform> platformList;
-	cl::Platform::get(&platformList);
-	checkErr(platformList.size() != 0 ? CL_SUCCESS : -1, "cl::Platform::get", __LINE__);
-	// Select the first platform
-	cl::Platform& platform = platformList.at(pltfC);
+const size_t max_agents = 600;
+const size_t max_walls = 50;
 
-	// Get the devices from platform
-	std::vector<cl::Device> devices;
-	err = platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+
+
+static struct {
+	cl_platform_id platform;
+	cl_device_id device;
+	cl_context context;
+
+	cl_mem bufferA;
+	cl_mem bufferW;
+
+	cl_program program;
+	cl_kernel kernel;
+
+	cl_command_queue queue;
+} clo;
+
+void initGpuCode() {
+	cl_int err;
+
+	const auto platformList = cl::getPlatforms();
+	checkErr(platformList.size() != 0 ? CL_SUCCESS : -1, "cl::Platform::get", __LINE__);
+	clo.platform = platformList.at(pltfC);
+
+	
+	const auto devices = cl::getDevices(clo.platform);
 	checkErr(devices.size() > 0 ? CL_SUCCESS : -1, "No devices!", __LINE__);
 
-	cl::Device& device = devices.at(deviC);
-	std::cout << info::getDeviceName(device) << "\n";
+	clo.device = devices.at(deviC);
+	std::cout << cl::getDeviceName(clo.device) << "\n";
 
-	cl::Context context(devices);
+	clo.context = clCreateContext(nullptr, 1, &clo.device, nullptr, nullptr, &err);
+	checkErr(err, "clCreateContext", __LINE__);
 
-	// Setup the output buffer
-	size_t canvasSize = (size_t) sizeX*(size_t) sizeY;
-	int* canvas = new int[canvasSize];
-	cl::Buffer outputBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR, canvasSize * sizeof(int), canvas, &err);
+	// Setup the buffers
+	clo.bufferA = clCreateBuffer(clo.context, CL_MEM_READ_WRITE, max_agents*sizeof(Agent), nullptr, &err);
+	checkErr(err, "clCreateBuffer(Agent)", __LINE__);
+
+	clo.bufferW = clCreateBuffer(clo.context, CL_MEM_WRITE_ONLY, max_walls * sizeof(Wall), nullptr, &err);
+	checkErr(err, "clCreateBuffer(Wall)", __LINE__);
 
 	// Compile kernel
 	std::string kernelSource = loadKernelFile(kernelFilename);
-	cl::Program::Sources source(1, std::make_pair(kernelSource.c_str(), kernelSource.length() + 1));
+	clo.program = clCreateProgramWithSource(clo.context, 1, (const char**) kernelSource.c_str(), nullptr, &err);
+	checkErr(err, "clCreateProgramWithSource", __LINE__);
 
-	cl::Program program(context, source);
-	err = program.build(devices, "-cl-single-precision-constant");
+	err = clBuildProgram(clo.program, 1, &clo.device, "-cl-single-precision-constant", nullptr, nullptr);
 	if (err) {
 		std::cout << "ERROR: Program::build() " << err << " " << __LINE__ << "\n";
-		std::string log = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device, &err);
-		checkErr(err, "Program::getBuildInfo()", __LINE__);
-		std::cout << "Log: " << log << "\n";
+
+		size_t len = 0;
+		clGetProgramBuildInfo(clo.program, clo.device, CL_PROGRAM_BUILD_LOG, 0, nullptr, &len);
+		auto log_buffer = std::make_unique<char[]>(len);
+		err = clGetProgramBuildInfo(clo.program, clo.device, CL_PROGRAM_BUILD_LOG, len, log_buffer.get(), nullptr);
+		std::cout << "Log: " << log_buffer.get() << "\n";
 		exit(EXIT_FAILURE);
 	}
 
 	std::cout << "Kernel compiled!" << "\n";
 
-	cl::Kernel kernel(program, "mandelbrotRedundant", &err);
-	checkErr(err, "Kernel::Kernel()", __LINE__);
+	clo.kernel = clCreateKernel(clo.program, "interactions", &err);
+	checkErr(err, "clCreateKernel", __LINE__);
+	
+	err = clSetKernelArg(clo.kernel, 0, sizeof(cl_mem), (void *) &clo.bufferA);
+	checkErr(err, "clSetKernelArg(0)", __LINE__);
+	err = clSetKernelArg(clo.kernel, 2, sizeof(cl_mem), (void *) &clo.bufferW);
+	checkErr(err, "clSetKernelArg(2)", __LINE__);
 
-	err = kernel.setArg(0, outputBuffer);
-	checkErr(err, "Kernel::setArg(0)", __LINE__);
-	err = kernel.setArg(1, 0);
-	checkErr(err, "Kernel::setArg(1)", __LINE__);
-	err = kernel.setArg(2, sizeX);
-	checkErr(err, "Kernel::setArg(2)", __LINE__);
-	err = kernel.setArg(3, sizeY);
-	checkErr(err, "Kernel::setArg(3)", __LINE__);
-
-	cl::CommandQueue queue(context, device, CL_QUEUE_PROFILING_ENABLE, &err);
-	checkErr(err, "CommandQueue::CommandQueue()", __LINE__);
-
-
-	cl::Event event;
-	//(kernel, offsets, global dimensions, local dimensions, condition events, retrun event)
-	err = queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(sizeX, sizeY),
-									 cl::NullRange, nullptr, &event);
-
-	checkErr(err, "ComamndQueue::enqueueNDRangeKernel()", __LINE__);
-
-	event.wait();
-	err = queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, canvasSize * sizeof(int), canvas);
-	checkErr(err, "ComamndQueue::enqueueReadBuffer()", __LINE__);
-
-	return canvas;
+	clo.queue = clCreateCommandQueue(clo.context, clo.device, CL_QUEUE_PROFILING_ENABLE, &err);
+	checkErr(err, "clCreateCommandQueue", __LINE__);
 }
-*/
+
+void gpuIter(std::vector<Agent> agents, std::vector<Wall> walls){
+	cl_int err;
+	cl_event event;
 
 
-#define MEM_SIZE (128)
-#define MAX_SOURCE_SIZE (0x100000)
+	cl_int num_agents = agents.size();
+	cl_int num_walls = walls.size();
+	err = clSetKernelArg(clo.kernel, 1, sizeof(cl_int), (void *) &num_agents);
+	checkErr(err, "clSetKernelArg(1)", __LINE__);
+	err = clSetKernelArg(clo.kernel, 3, sizeof(cl_int), (void *) &num_walls);
+	checkErr(err, "clSetKernelArg(3)", __LINE__);
+
+	err = clEnqueueWriteBuffer(clo.queue, clo.bufferA, CL_TRUE, 0, agents.size()*sizeof(Agent), agents.data(), 0, nullptr, nullptr);
+	checkErr(err, "clEnqueueWriteBuffer(Agent)", __LINE__);
+	err = clEnqueueWriteBuffer(clo.queue, clo.bufferW, CL_TRUE, 0, walls.size()*sizeof(Wall), walls.data(), 0, nullptr, nullptr);
+	checkErr(err, "clEnqueueWriteBuffer(Wall)", __LINE__);
+
+	size_t global_work_size = agents.size();
+
+	err = clEnqueueNDRangeKernel(clo.queue, clo.kernel, 1, nullptr, &global_work_size, nullptr, 0, nullptr, nullptr);
+	checkErr(err, "clEnqueueNDRangeKernel", __LINE__);
+
+	err = clEnqueueReadBuffer(clo.queue, clo.bufferA, CL_TRUE, 0, agents.size()*sizeof(Agent), agents.data(), 0, NULL, NULL);
+	checkErr(err, "clEnqueueReadBuffer", __LINE__);
+}
 
 
-#define _CRT_SECURE_NO_WARNINGS
-
-int launchCl(void) {
-	info::printAll();
-
-	cl_device_id device_id = nullptr;
-	cl_context context = nullptr;
-	cl_command_queue command_queue = nullptr;
-	cl_mem memobj = nullptr;
-	cl_program program = nullptr;
-	cl_kernel kernel = nullptr;
-	cl_platform_id platform_id = nullptr;
-	cl_uint ret_num_devices;
-	cl_uint ret_num_platforms;
-	cl_int ret;
-
-	char string[MEM_SIZE];
-
-	FILE *fp;
-	char fileName[] = "./hello.cl";
-	char *source_str;
-	size_t source_size;
-
-	/* Load the source code containing the kernel*/
-	fp = fopen(fileName, "r");
-	if (!fp) {
-		fprintf(stderr, "Failed to load kernel.\n");
-		exit(1);
-	}
-	source_str = (char*) malloc(MAX_SOURCE_SIZE);
-	source_size = fread(source_str, 1, MAX_SOURCE_SIZE, fp);
-	fclose(fp);
-
-	/* Get Platform and Device Info */
-	ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
-	ret = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_DEFAULT, 1, &device_id, &ret_num_devices);
-
-	/* Create OpenCL context */
-	context = clCreateContext(nullptr, 1, &device_id, nullptr, nullptr, &ret);
-
-	/* Create Command Queue */
-	command_queue = clCreateCommandQueue(context, device_id, 0, &ret);
-
-	/* Create Memory Buffer */
-	memobj = clCreateBuffer(context, CL_MEM_READ_WRITE, MEM_SIZE * sizeof(char), nullptr, &ret);
-
-	/* Create Kernel Program from the source */
-	program = clCreateProgramWithSource(context, 1, (const char **) &source_str,
-		(const size_t *) &source_size, &ret);
-
-	/* Build Kernel Program */
-	ret = clBuildProgram(program, 1, &device_id, nullptr, nullptr, nullptr);
-
-	/* Create OpenCL Kernel */
-	kernel = clCreateKernel(program, "hello", &ret);
-
-	/* Set OpenCL Kernel Parameters */
-	ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *) &memobj);
-
-	/* Execute OpenCL Kernel */
-	ret = clEnqueueTask(command_queue, kernel, 0, nullptr, nullptr);
-
-	/* Copy results from the memory buffer */
-	ret = clEnqueueReadBuffer(command_queue, memobj, CL_TRUE, 0,
-							  MEM_SIZE * sizeof(char), string, 0, NULL, NULL);
-
-	/* Display Result */
-	puts(string);
-
+void gpuClose() {
+	cl_int err;
 	/* Finalization */
-	ret = clFlush(command_queue);
-	ret = clFinish(command_queue);
-	ret = clReleaseKernel(kernel);
-	ret = clReleaseProgram(program);
-	ret = clReleaseMemObject(memobj);
-	ret = clReleaseCommandQueue(command_queue);
-	ret = clReleaseContext(context);
-
-	free(source_str);
-
-	return 0;
+	err = clFlush(clo.queue);
+	err = clFinish(clo.queue);
+	err = clReleaseKernel(clo.kernel);
+	err = clReleaseProgram(clo.program);
+	err = clReleaseMemObject(clo.bufferA);
+	err = clReleaseMemObject(clo.bufferW);
+	err = clReleaseCommandQueue(clo.queue);
+	err = clReleaseContext(clo.context);
 }
+

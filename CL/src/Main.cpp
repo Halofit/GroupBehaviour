@@ -40,18 +40,17 @@ const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 800;
 
 
+void addAgentsResp(int num) {
+	auto p = getMousePosition();
+	Vec2f loc{p.x / world_multiplier, p.y / world_multiplier};
+	g.simulation.addAgents(loc, num);
+}
+
 void handleKeyboardInput(SDL_Event e) {
 	switch (e.key.keysym.sym) {
 		case SDLK_ESCAPE:
 			g.quit = true;
 			break;
-		case SDLK_v: {
-			auto p = getMousePosition();
-			Vec2f loc{p.x / world_multiplier, p.y / world_multiplier};
-			g.simulation.addAgent(loc);
-
-			break;
-		}
 
 		case SDLK_c: {
 			static Vec2f start;
@@ -69,6 +68,58 @@ void handleKeyboardInput(SDL_Event e) {
 			}
 			break;
 		}
+
+		case SDLK_1: {
+			addAgentsResp(1);
+			break;
+		}
+
+		case SDLK_2: {
+			addAgentsResp(2);
+			break;
+		}
+
+		case SDLK_3: {
+			addAgentsResp(3);
+			break;
+		}
+
+		case SDLK_4: {
+			addAgentsResp(4);
+			break;
+		}
+
+		case SDLK_5: {
+			addAgentsResp(5);
+			break;
+		}
+
+		case SDLK_6: {
+			addAgentsResp(6);
+			break;
+		}
+
+		case SDLK_7: {
+			addAgentsResp(7);
+			break;
+		}
+
+		case SDLK_8: {
+			addAgentsResp(8);
+			break;
+		}
+
+		case SDLK_9: {
+			addAgentsResp(9);
+			break;
+		}
+
+		case SDLK_0: {
+			addAgentsResp(10);
+			break;
+		}
+
+
 
 		case SDLK_g: {
 			g.simulation.clear();
@@ -139,7 +190,7 @@ int main(int argc, char* args[]) {
 		SDL_Event sdl_event;
 
 		Vec2i ws = getWindowSize();
-		Vec2f world_size{ws.x/world_multiplier, ws.y/world_multiplier};
+		Vec2f world_size{ws.x / world_multiplier, ws.y / world_multiplier};
 		g.simulation.init(world_size);
 
 		//While application is running
@@ -165,8 +216,8 @@ int main(int argc, char* args[]) {
 
 			//Draw some UI
 			std::stringstream ss;
-			ss << tick_counter;
-			renderText(leftPad(ss.str(), 4), {10,18}, PositionAlignment::BOT_LEFT);
+			ss << g.simulation.elapsed_time << "(" << tick_counter << ")";
+			renderText(ss.str(), {10,18}, PositionAlignment::BOT_LEFT);
 
 			ss.str(std::string()); //clear ss
 			ss << g.simulation.agents.size();
@@ -190,13 +241,13 @@ int main(int argc, char* args[]) {
 			}
 
 
-			g.simulation.tick(0.01f);
+			g.simulation.tick(0.016f);
 
 
 			start_time = std::clock();
 		}
 	}
-	
+
 	//Free resources and close SDL
 	closeSDL();
 
