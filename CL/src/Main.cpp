@@ -37,7 +37,7 @@ Vec2i getMousePosition() {
 // Screen dimension constants
 const float world_multiplier = 20.f;
 const int SCREEN_WIDTH = 800;
-const int SCREEN_HEIGHT = 800;
+const int SCREEN_HEIGHT = 600;
 
 
 void addAgentsResp(int num) {

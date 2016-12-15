@@ -24,7 +24,7 @@ struct Vec2Base {
 	}
 
 
-	Vec2Base(float angle) const {
+	Vec2Base(float angle) {
 		this->x = static_cast<T>(std::cosf(angle));
 		this->y = static_cast<T>(std::sinf(angle));
 	}
@@ -71,7 +71,7 @@ struct Vec2Base {
 	}
 
 
-	Vec2Base operator+=(Vec2Base b) const {
+	Vec2Base operator+=(Vec2Base b) {
 		x += b.x;
 		y += b.y;
 		return (*this);
