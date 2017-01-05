@@ -69,6 +69,11 @@ void handleKeyboardInput(SDL_Event e) {
 			break;
 		}
 
+		case SDLK_q: {
+			g.simulation.switchFunction();
+			break;
+		}
+
 		case SDLK_1: {
 			addAgentsResp(1);
 			break;
@@ -216,7 +221,7 @@ int main(int argc, char* args[]) {
 
 			//Draw some UI
 			std::stringstream ss;
-			ss << g.simulation.elapsed_time << "(" << tick_counter << ")";
+			ss << g.simulation.elapsed_time << "(" << tick_counter << ") fun_id: " << g.simulation.fun_id;
 			renderText(ss.str(), {10,18}, PositionAlignment::BOT_LEFT);
 
 			ss.str(std::string()); //clear ss

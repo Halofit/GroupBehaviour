@@ -83,7 +83,7 @@ struct Vec2Base {
 	}
 
 
-	Vec2Base operator-=(Vec2Base b) const {
+	Vec2Base operator-=(Vec2Base b) {
 		x -= b.x;
 		y -= b.y;
 		return (*this);

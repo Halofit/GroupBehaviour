@@ -1,5 +1,7 @@
 #pragma once
+
 #include <vector>
+#include <set>
 #include <iostream>
 #include <algorithm>
 #include "Vectors.h"
@@ -94,11 +96,16 @@ struct Simulation {
 	float bound_down;
 	float bound_left;
 	float bound_right;
-	
 
+	void (Simulation::*secTerm)() = nullptr;
+	
 	Simulation() {
 		//We want this to be global so we don't allow a constructor with an argument
 		elapsed_time = INFINITY;
+		secTerm = &Simulation::secondTermMatrix;
+		switchFunction();
+		switchFunction();
+		switchFunction();
 	}
 
 	void init(Vec2f world_size) {
@@ -211,11 +218,10 @@ struct Simulation {
 				}
 			}
 		}
-
 	}
 
+	
 	void secondTerm() {
-
 		for (int i = 0; i < agents.size(); ++i) {
 			//Split in two for micro optimisation
 			for (int j = 0; j < i; ++j) {
@@ -224,6 +230,20 @@ struct Simulation {
 
 			for (int j = i+1; j < agents.size(); ++j) {
 				agents[i].accumulator += force(agents[i], agents[j]);
+			}
+		}
+	}
+	
+	
+	void secondTermMatrix() {
+		size_t n = agents.size();
+
+		for (int i = 0; i < n; ++i) {
+			for (int j = 0; j < i; ++j) {
+				//Wrong assumption: force is not actually comutative
+				Vec2f f = force(agents[i], agents[j]);
+				agents[i].accumulator += f;
+				agents[j].accumulator -= f;
 			}
 		}
 	}
@@ -262,13 +282,24 @@ struct Simulation {
 		agents.erase(std::remove_if(agents.begin(), agents.end(), predicate), agents.end());
 	}
 
+	int fun_id = 0;
+	void switchFunction(){
+		fun_id++;
+		fun_id %= 3;
+		if(fun_id == 0) this->secTerm = &Simulation::secondTerm;
+		else if (fun_id == 1) this->secTerm = &Simulation::secondTermMatrix;
+		else if (fun_id == 2) this->secTerm = &Simulation::secondTermOld;
+		else logError("No such function id");
+	}
+
 
 	void tick(float delta_t) {
 		cleanRedundant();
 
 		//Calculate three terms of equation
 		firstTerm();
-		secondTerm();
+		//secondTerm();
+		(this->*secTerm)();
 		thirdTerm();
 		applyForces(delta_t);
 
