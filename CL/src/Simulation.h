@@ -76,7 +76,7 @@ struct Wall {
 	}
 };
 
-static const float max_velocity = 5.f;
+static const float max_velocity = 1.f;
 
 static const float agent_acceleration_time = 0.5;
 static const float A_i = 2e3f;
@@ -97,15 +97,14 @@ struct Simulation {
 	float bound_left;
 	float bound_right;
 
-	void (Simulation::*secTerm)() = nullptr;
-	
+	Vec2f target_location;
+
 	Simulation() {
-		//We want this to be global so we don't allow a constructor with an argument
+		//We want this to be global & on the stack so we don't allow a constructor with an argument
+		//Instead we're opting for a init function -> this is ugly, but necessary for this method
 		elapsed_time = INFINITY;
-		secTerm = &Simulation::secondTermMatrix;
-		switchFunction();
-		switchFunction();
-		switchFunction();
+
+		target_location = Vec2f{0.f,0.f};
 	}
 
 	void init(Vec2f world_size) {
@@ -209,8 +208,8 @@ struct Simulation {
 	}
 
 
-
-	void secondTermOld() {
+	
+	void secondTermBasic() {
 		for (auto& a : agents) {
 			for (auto& a2 : agents) {
 				if (&a != &a2) {
@@ -219,28 +218,15 @@ struct Simulation {
 			}
 		}
 	}
-
+		
 	
+	//Compute second term using a "upper diagonal matrix"
+	//This means only half the interactions are computed
 	void secondTerm() {
-		for (int i = 0; i < agents.size(); ++i) {
-			//Split in two for micro optimisation
-			for (int j = 0; j < i; ++j) {
-				agents[i].accumulator += force(agents[i], agents[j]);
-			}
-
-			for (int j = i+1; j < agents.size(); ++j) {
-				agents[i].accumulator += force(agents[i], agents[j]);
-			}
-		}
-	}
-	
-	
-	void secondTermMatrix() {
 		size_t n = agents.size();
 
 		for (int i = 0; i < n; ++i) {
 			for (int j = 0; j < i; ++j) {
-				//Wrong assumption: force is not actually comutative
 				Vec2f f = force(agents[i], agents[j]);
 				agents[i].accumulator += f;
 				agents[j].accumulator -= f;
@@ -260,7 +246,7 @@ struct Simulation {
 	void applyForces(float delta_t) {
 		for (auto& a : agents) {
 			Vec2f velocityChange = (a.accumulator / a.mass) * delta_t;
-			if (velocityChange.lengthSquared() > max_velocity * max_velocity) {
+			if (velocityChange.lengthSquared() > (max_velocity * max_velocity)) {
 				velocityChange = velocityChange.normalised() * max_velocity;
 			}
 
@@ -281,25 +267,27 @@ struct Simulation {
 
 		agents.erase(std::remove_if(agents.begin(), agents.end(), predicate), agents.end());
 	}
+	
+	Vec2f getTargetLocation(Agent& a){
+		return target_location;
+	}
 
-	int fun_id = 0;
-	void switchFunction(){
-		fun_id++;
-		fun_id %= 3;
-		if(fun_id == 0) this->secTerm = &Simulation::secondTerm;
-		else if (fun_id == 1) this->secTerm = &Simulation::secondTermMatrix;
-		else if (fun_id == 2) this->secTerm = &Simulation::secondTermOld;
-		else logError("No such function id");
+	void setDirections(){
+		for (auto& a : agents) {
+			Vec2f target_location = getTargetLocation(a);
+			a.direction = (target_location - a.location).normalised();
+		}
 	}
 
 
 	void tick(float delta_t) {
 		cleanRedundant();
 
+		setDirections();
+
 		//Calculate three terms of equation
 		firstTerm();
-		//secondTerm();
-		(this->*secTerm)();
+		secondTerm();
 		thirdTerm();
 		applyForces(delta_t);
 

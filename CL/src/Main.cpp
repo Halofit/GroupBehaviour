@@ -69,11 +69,6 @@ void handleKeyboardInput(SDL_Event e) {
 			break;
 		}
 
-		case SDLK_q: {
-			g.simulation.switchFunction();
-			break;
-		}
-
 		case SDLK_1: {
 			addAgentsResp(1);
 			break;
@@ -132,6 +127,13 @@ void handleKeyboardInput(SDL_Event e) {
 		}
 		case SDLK_f: {
 			g.simulation.clearAgents();
+			break;
+		}
+		case SDLK_y: {
+			auto p = getMousePosition();
+			Vec2f loc{p.x / world_multiplier, p.y / world_multiplier};
+
+			g.simulation.target_location = loc;
 			break;
 		}
 	}
@@ -221,7 +223,7 @@ int main(int argc, char* args[]) {
 
 			//Draw some UI
 			std::stringstream ss;
-			ss << g.simulation.elapsed_time << "(" << tick_counter << ") fun_id: " << g.simulation.fun_id;
+			ss << g.simulation.elapsed_time << "(" << tick_counter << ")";
 			renderText(ss.str(), {10,18}, PositionAlignment::BOT_LEFT);
 
 			ss.str(std::string()); //clear ss
